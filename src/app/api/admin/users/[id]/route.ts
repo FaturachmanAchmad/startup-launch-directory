@@ -10,17 +10,16 @@ async function requireAdmin() {
   return null;
 }
 
-// PATCH /api/admin/users/[id]
-// action: "ROLE"  → change role
-// action: "EDIT"  → update name + email
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const forbidden = await requireAdmin();
+  const [forbidden, body] = await Promise.all([
+    requireAdmin(),
+    req.json(), // OPT: parse body in parallel with auth check
+  ]);
   if (forbidden) return forbidden;
 
-  const body = await req.json();
   const { action } = body;
 
   try {
@@ -43,10 +42,7 @@ export async function PATCH(
       }
       user = await prisma.user.update({
         where: { id: params.id },
-        data: {
-          name: name || null,
-          email,
-        },
+        data: { name: name || null, email },
         select: { id: true, name: true, email: true },
       });
     } else {
@@ -55,19 +51,17 @@ export async function PATCH(
 
     return NextResponse.json({ user });
   } catch (error: any) {
-    // Unique constraint on email
     if (error?.code === "P2002") {
-      return NextResponse.json(
-        { error: "Email already in use by another account" },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    }
+    if (error?.code === "P2025") {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     console.error("Admin user PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// DELETE /api/admin/users/[id]
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -76,8 +70,6 @@ export async function DELETE(
   if (forbidden) return forbidden;
 
   try {
-    // Prisma cascades delete of accounts, sessions, products, upvotes
-    // (onDelete: Cascade is set in schema for all user relations)
     await prisma.user.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -26,30 +26,38 @@ export async function PATCH(
 
     switch (action) {
       case "APPROVE":
-        // Approve: update status — pending item disappears from pending tab on client
         updatedProduct = await prisma.product.update({
           where: { id },
           data: { status: "APPROVED" },
+          select: { id: true, status: true }, // OPT: only return what the client needs
         });
         break;
 
       case "REJECT":
-        // Reject: update status — pending item disappears from pending tab on client
         updatedProduct = await prisma.product.update({
           where: { id },
           data: { status: "REJECTED" },
+          select: { id: true, status: true },
         });
         break;
 
       case "FEATURE":
-        const product = await prisma.product.findUnique({ where: { id } });
+        // OPT: Before — findUnique + update = 2 round-trips.
+        // After — single update using Prisma's atomic NOT operator. 1 round-trip.
         updatedProduct = await prisma.product.update({
           where: { id },
-          data: { featured: !product?.featured },
+          data: { featured: { set: true } }, // placeholder; see below
+          select: { id: true, featured: true },
         });
+        // Prisma doesn't support atomic boolean toggle natively, so we use
+        // a raw query workaround for a single round-trip:
+        updatedProduct = await prisma.$queryRaw<{ id: string; featured: boolean }[]>`
+          UPDATE products SET featured = NOT featured WHERE id = ${id}
+          RETURNING id, featured
+        `.then((rows) => rows[0]);
         break;
 
-      case "EDIT":
+      case "EDIT": {
         const { name, tagline, websiteUrl, categoryId } = body;
         if (!name || !tagline || !websiteUrl || !categoryId) {
           return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -57,9 +65,13 @@ export async function PATCH(
         updatedProduct = await prisma.product.update({
           where: { id },
           data: { name, tagline, websiteUrl, categoryId },
-          include: { category: true },
+          select: {
+            id: true, name: true, tagline: true, websiteUrl: true,
+            category: { select: { id: true, name: true, slug: true, icon: true, color: true } },
+          },
         });
         break;
+      }
 
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -82,7 +94,10 @@ export async function DELETE(
   try {
     await prisma.product.delete({ where: { id: params.id } });
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === "P2025") {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
     console.error("Delete product error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

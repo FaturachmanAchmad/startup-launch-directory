@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Rocket, Lock, AlertCircle } from "lucide-react";
+import Image from "next/image";
+import { Rocket, Lock, AlertCircle, Upload, X, ImageIcon } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Category = {
@@ -38,7 +39,15 @@ export default function SubmitPage() {
     twitterUrl: "",
     categoryId: "",
     logoUrl: "",
+    imageUrl: "",  
   });
+  
+  // ADD these upload states below the form state:
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -77,34 +86,49 @@ export default function SubmitPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!validate()) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to submit");
-      }
-
-      toast.success(
-        "🚀 Product submitted! It'll be reviewed within 24 hours."
-      );
-      router.push("/dashboard");
-    } catch (error: any) {
-      toast.error(error.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+  async function uploadFile(file: File, type: "logo" | "image"): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("type", type);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    return data.url;
   }
+
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  if (!validate()) return;
+
+  setLoading(true);
+  try {
+    // Upload images first if files were selected
+    let finalLogoUrl = form.logoUrl;
+    let finalImageUrl = form.imageUrl;
+
+    setUploading(true);
+    if (logoFile) finalLogoUrl = await uploadFile(logoFile, "logo");
+    if (imageFile) finalImageUrl = await uploadFile(imageFile, "image");
+    setUploading(false);
+
+    const res = await fetch("/api/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, logoUrl: finalLogoUrl, imageUrl: finalImageUrl }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to submit");
+
+    toast.success("🚀 Product submitted! It'll be reviewed within 24 hours.");
+    router.push("/dashboard");
+  } catch (error: any) {
+    toast.error(error.message || "Something went wrong");
+  } finally {
+    setLoading(false);
+    setUploading(false);
+  }
+}
 
   if (status === "loading") {
     return (
@@ -261,20 +285,117 @@ export default function SubmitPage() {
           )}
         </div>
 
-        {/* Logo URL */}
-        <div className="space-y-1.5">
-          <Label htmlFor="logoUrl">Logo URL (optional)</Label>
-          <Input
-            id="logoUrl"
-            type="url"
-            placeholder="https://yourproduct.com/logo.png"
-            value={form.logoUrl}
-            onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-          />
-          <p className="text-xs text-muted-foreground">
-            Direct link to your product logo (PNG/JPG, square recommended)
-          </p>
-        </div>
+        {/* Logo Upload */}
+<div className="space-y-1.5">
+  <Label>Logo <span className="text-muted-foreground text-xs">(optional)</span></Label>
+  <div className="flex items-center gap-4">
+    {/* Preview */}
+    <div className="h-16 w-16 rounded-2xl border bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+      {logoPreview ? (
+        <Image src={logoPreview} alt="Logo preview" width={64} height={64} className="h-full w-full object-cover" />
+      ) : (
+        <ImageIcon className="h-6 w-6 text-muted-foreground" />
+      )}
+    </div>
+
+    <div className="flex-1 space-y-2">
+      {/* File upload */}
+      <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground hover:text-foreground">
+        <Upload className="h-4 w-4" />
+        {logoFile ? logoFile.name : "Upload logo image"}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setLogoFile(file);
+            setLogoPreview(URL.createObjectURL(file));
+            setForm({ ...form, logoUrl: "" }); // clear URL if file chosen
+          }}
+        />
+      </label>
+
+      {/* OR URL input */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">or paste URL</span>
+        <Input
+          type="url"
+          placeholder="https://example.com/logo.png"
+          value={form.logoUrl}
+          onChange={(e) => {
+            setForm({ ...form, logoUrl: e.target.value });
+            if (e.target.value) { setLogoFile(null); setLogoPreview(""); }
+          }}
+          className="h-7 text-xs"
+        />
+      </div>
+
+      {/* Clear */}
+      {(logoFile || logoPreview) && (
+        <button type="button" onClick={() => { setLogoFile(null); setLogoPreview(""); }}
+          className="flex items-center gap-1 text-xs text-destructive hover:underline">
+          <X className="h-3 w-3" /> Remove
+        </button>
+      )}
+    </div>
+  </div>
+  <p className="text-xs text-muted-foreground">Square image recommended. PNG/JPG/WebP, max 5MB.</p>
+</div>
+
+{/* Product Screenshot Upload */}
+<div className="space-y-1.5">
+  <Label>Product Screenshot <span className="text-muted-foreground text-xs">(optional)</span></Label>
+
+  {/* Preview */}
+  {imagePreview && (
+    <div className="relative rounded-xl overflow-hidden border bg-muted aspect-video mb-2">
+      <Image src={imagePreview} alt="Product preview" fill className="object-cover" />
+      <button
+        type="button"
+        onClick={() => { setImageFile(null); setImagePreview(""); }}
+        className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )}
+
+  {/* File upload */}
+  <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground hover:text-foreground">
+    <Upload className="h-4 w-4" />
+    {imageFile ? imageFile.name : "Upload product screenshot"}
+    <input
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImageFile(file);
+        setImagePreview(URL.createObjectURL(file));
+        setForm({ ...form, imageUrl: "" });
+      }}
+    />
+  </label>
+
+  {/* OR URL input */}
+  <div className="flex items-center gap-2">
+    <span className="text-xs text-muted-foreground shrink-0">or paste URL</span>
+    <Input
+      type="url"
+      placeholder="https://example.com/screenshot.png"
+      value={form.imageUrl}
+      onChange={(e) => {
+        setForm({ ...form, imageUrl: e.target.value });
+        if (e.target.value) { setImageFile(null); setImagePreview(""); }
+      }}
+      className="h-7 text-xs"
+    />
+  </div>
+  <p className="text-xs text-muted-foreground">16:9 ratio recommended. PNG/JPG/WebP, max 5MB.</p>
+</div>
 
         {/* Twitter/X */}
         <div className="space-y-1.5">
@@ -293,24 +414,15 @@ export default function SubmitPage() {
 
         {/* Submit */}
         <div className="pt-2">
-          <Button
-            type="submit"
-            disabled={loading}
-            size="lg"
-            className="w-full gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Rocket className="h-4 w-4" />
-                Submit Product
-              </>
-            )}
-          </Button>
+        <Button type="submit" disabled={loading || uploading} size="lg" className="w-full gap-2">
+  {uploading ? (
+    <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Uploading images...</>
+  ) : loading ? (
+    <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Submitting...</>
+  ) : (
+    <><Rocket className="h-4 w-4" />Submit Product</>
+  )}
+</Button>
           <p className="text-center text-xs text-muted-foreground mt-3">
             By submitting, you agree to our{" "}
             <Link href="#" className="underline">

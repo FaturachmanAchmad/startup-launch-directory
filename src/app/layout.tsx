@@ -6,7 +6,14 @@ import { Footer } from "@/components/layout/footer";
 import { Providers } from "./providers";
 import { ToastProvider } from "@/components/ui/toast-provider";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-geist-sans" });
+// OPT: Add display:swap so text renders immediately with fallback font.
+// Add preload:true (default) ensures the font file is <link rel=preload>.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+  display: "swap",
+  preload: true,
+});
 
 export const metadata: Metadata = {
   title: {
@@ -15,14 +22,12 @@ export const metadata: Metadata = {
   },
   description:
     "The go-to directory for indie makers and startup founders to discover, launch, and promote their products.",
-  keywords: [
-    "startups",
-    "products",
-    "indie makers",
-    "product hunt",
-    "launch",
-    "directory",
-  ],
+    icons: {
+      icon: "/icon.png",
+      shortcut: "/favicon.ico",
+      apple: "/icon.png",
+    },
+  keywords: ["startups", "products", "indie makers", "product hunt", "launch", "directory"],
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -35,22 +40,19 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "LaunchDir — Discover the best new startups",
-    description:
-      "The go-to directory for indie makers and startup founders.",
+    description: "The go-to directory for indie makers and startup founders.",
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: { index: true, follow: true },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* OPT: preconnect to Supabase storage so image requests skip DNS+TCP handshake */}
+        <link rel="preconnect" href="https://zbvxeivxcszgidekinmw.supabase.co" />
+        <link rel="dns-prefetch" href="https://zbvxeivxcszgidekinmw.supabase.co" />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <Providers>
           <div className="min-h-screen flex flex-col">

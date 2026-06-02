@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,22 +9,23 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String                 @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String                 @unique
   emailVerified DateTime?
   image         String?
+  role          Role                   @default(USER)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  accounts      Account[]
+  newsletters   NewsletterSubscriber[]
+  products      Product[]
+  sessions      Session[]
+  upvotes       Upvote[]
   password      String?
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
 
-  accounts    Account[]
-  sessions    Session[]
-  products    Product[]
-  upvotes     Upvote[]
-  newsletters NewsletterSubscriber[]
-
+  @@index([role])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -48,7 +46,6 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
-  @@map("accounts")
 }
 
 model Session {
@@ -58,6 +55,7 @@ model Session {
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])         // ← OPT: auth adapter lookups
   @@map("sessions")
 }
 
@@ -79,9 +77,9 @@ model Category {
   color       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  products    Product[]
 
-  products Product[]
-
+  // slug already @unique — acts as index. No extra index needed.
   @@map("categories")
 }
 
@@ -90,8 +88,9 @@ model Product {
   name        String
   slug        String        @unique
   tagline     String
-  description String        @db.Text
+  description String
   logoUrl     String?
+  imageUrl    String?
   websiteUrl  String
   twitterUrl  String?
   categoryId  String
@@ -101,11 +100,19 @@ model Product {
   launchDate  DateTime      @default(now())
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  category    Category      @relation(fields: [categoryId], references: [id])
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  upvotes     Upvote[]
 
-  category Category @relation(fields: [categoryId], references: [id])
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  upvotes  Upvote[]
-
+  // ← OPT: the most frequent query pattern is (status, launchDate DESC)
+  // A composite index covers both the WHERE and ORDER BY in one scan
+  @@index([status, launchDate(sort: Desc)])
+  // ← OPT: featured flag filter used on home page + admin
+  @@index([status, featured])
+  // ← OPT: dashboard & admin filter products by userId
+  @@index([userId])
+  // ← OPT: admin filters by categoryId for related products
+  @@index([categoryId, status])
   @@map("products")
 }
 
@@ -114,23 +121,36 @@ model Upvote {
   userId    String
   productId String
   createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
+  // ← OPT: upvote count queries filter by productId
+  @@index([productId])
   @@map("upvotes")
 }
 
 model NewsletterSubscriber {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  userId      String?
+  id           String   @id @default(cuid())
+  email        String   @unique
+  userId       String?
   subscribedAt DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-
+  // email already @unique — acts as index.
   @@map("newsletter_subscribers")
+}
+
+model PasswordResetOTP {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("password_reset_otps")
 }
 
 enum Role {

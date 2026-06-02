@@ -11,28 +11,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { email } = schema.parse(body);
 
-    const existing = await prisma.newsletterSubscriber.findUnique({
-      where: { email },
+    // OPT: Before — findUnique + create = 2 DB round-trips + a race condition
+    //      (two concurrent requests can both pass the findUnique check).
+    //
+    // After — createMany with skipDuplicates = 1 round-trip, atomic at DB level.
+    // The unique constraint on email guarantees correctness with no extra query.
+
+    const result = await prisma.newsletterSubscriber.createMany({
+      data: [{ email }],
+      skipDuplicates: true,
     });
 
-    if (existing) {
-      return NextResponse.json(
-        { error: "Already subscribed!" },
-        { status: 400 }
-      );
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Already subscribed!" }, { status: 400 });
     }
-
-    await prisma.newsletterSubscriber.create({
-      data: { email },
-    });
 
     return NextResponse.json({ message: "Subscribed successfully" });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.errors[0].message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

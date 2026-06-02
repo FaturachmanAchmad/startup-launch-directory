@@ -32,6 +32,26 @@ const PARTICLES = [
   { size: 5,  left: "93%", delay: "2.5s",  dur: "6s",  opacity: 0.15, color: "#fdba74" },
 ];
 
+function useCountUp(target: number, duration = 1200) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!target) return; // wait until we have a real value
+    let frame: number;
+    const start = performance.now();
+    function tick(now: number) {
+      const p = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setCount(Math.round(ease * target));
+      if (p < 1) frame = requestAnimationFrame(tick);
+    }
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, duration]); // re-runs when target changes from 0 → real value
+
+  return count;
+}
+
 // Orbit ring that slowly spins
 function OrbitRing({ radius, duration, clockwise = true, children }: {
   radius: number; duration: string; clockwise?: boolean; children?: React.ReactNode;
@@ -73,7 +93,9 @@ export function HeroSection({ productCount, userCount, isLoggedIn }: Props) {
   const [mounted, setMounted] = useState(false);
   const [rocketLaunched, setRocketLaunched] = useState(false);
   const rocketRef = useRef<HTMLDivElement>(null);
-
+  // REMOVE the ref versions, replace with:
+  const animatedProducts = useCountUp(productCount);
+  const animatedUsers = useCountUp(userCount);
   useEffect(() => {
     // Stagger mount for entrance animations
     const t = setTimeout(() => setMounted(true), 50);
@@ -151,9 +173,9 @@ export function HeroSection({ productCount, userCount, isLoggedIn }: Props) {
           }}
         >
           <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-green-600 dark:text-green-400 font-semibold">{productCount}</span>
+          <span className="text-green-600 dark:text-green-400 font-semibold">{animatedProducts}</span>
           <span>products launched by</span>
-          <span className="text-foreground font-semibold">{userCount}+</span>
+          <span className="text-foreground font-semibold">{animatedUsers}+</span>
           <span>makers</span>
         </div>
 

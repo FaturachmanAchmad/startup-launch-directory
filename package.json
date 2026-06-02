@@ -15,6 +15,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@auth/core": "^0.41.2",
     "@auth/prisma-adapter": "^2.4.2",
     "@prisma/client": "^5.16.1",
     "@radix-ui/react-avatar": "^1.1.0",
@@ -36,6 +37,7 @@
     "next": "14.2.5",
     "next-auth": "^5.0.0-beta.19",
     "next-themes": "^0.3.0",
+    "nodemailer": "^7.0.13",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1",
@@ -47,6 +49,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.5.0",
