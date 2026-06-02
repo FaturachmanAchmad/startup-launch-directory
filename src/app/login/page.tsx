@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import LoginContent from "./login-content";
 
-export default function LoginPage() {
+export default function Page() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <LoginContent />

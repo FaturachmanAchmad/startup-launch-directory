@@ -1,10 +1,9 @@
-// src/app/verify-reset-code/page.tsx
 import { Suspense } from "react";
 import VerifyResetCodeContent from "./verify-reset-code-content";
 
-export default function VerifyResetCodePage() {
+export default function Page() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<div>Loading...</div>}>
       <VerifyResetCodeContent />
     </Suspense>
   );
